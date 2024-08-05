@@ -1,26 +1,51 @@
-﻿# Use the current directory
-$directoryPath = Get-Location
+﻿<#
+.SYNOPSIS
+    DOS Filename Renamer Script
 
-# Initialize a hashtable to store the DOS names
-$dosNames = @{}
+.DESCRIPTION
+    This PowerShell script renames files in a specified directory to be compatible with the DOS 8.3 filename convention.
+    It traverses the directory recursively and generates DOS-compatible names for each file.
+    The script supports an optional `--hex` argument to use hexadecimal numbering for filenames that exceed the 8-character limit.
 
-# Initialize an array to store the original and DOS names
-$proposedChanges = @()
+.PARAMETERS
+    --hex
+        Optional. If provided, the script will use hexadecimal numbering for filenames that exceed the 8-character limit.
 
-# Function to generate DOS compatible name
+.NOTES
+    - The script must be run with appropriate permissions to rename files in the specified directory.
+    - The user is prompted to confirm the proposed changes before the renaming operation is performed.
+    - The script ignores directories and only processes files.
+
+.EXAMPLE
+    To run the script and rename files in the current directory:
+    .\dos-renamer.ps1
+
+    To run the script with hexadecimal numbering for long filenames:
+    .\dos-renamer.ps1 --hex
+
+    Follow the prompts to confirm the proposed changes.
+
+#>
+
+$directory_path = Get-Location
+
+$dos_names = @{}
+
+$proposed_changes = @()
+
 function Get-DOSName($name, $counter, $hex) {
-    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($name)
+    $base_name = [System.IO.Path]::GetFileNameWithoutExtension($name)
     $extension = [System.IO.Path]::GetExtension($name)
 
-    if ($baseName.Length -gt 8) {
+    if ($base_name.Length -gt 8) {
         if ($hex) {
             if ($counter -gt 255) {
-                $baseName = $baseName.Substring(0, 5) + $counter.ToString("X3")
+                $base_name = $base_name.Substring(0, 5) + $counter.ToString("X3")
             } else {
-                $baseName = $baseName.Substring(0, 6) + $counter.ToString("X2")
+                $base_name = $base_name.Substring(0, 6) + $counter.ToString("X2")
             }
         } else {
-            $baseName = $baseName.Substring(0, 6) + "~" + $counter
+            $base_name = $base_name.Substring(0, 6) + "~" + $counter
         }
     }
 
@@ -28,54 +53,43 @@ function Get-DOSName($name, $counter, $hex) {
         $extension = $extension.Substring(0, 3)
     }
 
-    return $baseName + $extension
+    return $base_name + $extension
 }
 
-# Check if the -h switch is given
 $hex = $false
 if ($args -contains "--hex") {
     $hex = $true
 }
 
-# Traverse the directory and its subdirectories
-Get-ChildItem -Path $directoryPath -Recurse | ForEach-Object {
-    # Get the original file name
-    $originalName = $_.Name
+Get-ChildItem -Path $directory_path -Recurse | ForEach-Object {
+    $original_name = $_.Name
 
-    # Generate the DOS compatible name
-    $dosName = Get-DOSName $originalName 1 $hex
+    $dos_name = Get-DOSName $original_name 1 $hex
 
-    # Check for duplicates and modify the name if necessary
     $counter = 2
-    while ($dosNames.ContainsKey($dosName)) {
-        $dosName = Get-DOSName $originalName $counter $hex
+    while ($dos_names.ContainsKey($dos_name)) {
+        $dos_name = Get-DOSName $original_name $counter $hex
         $counter++
     }
 
-    # Store the DOS name in the hashtable
-    $dosNames[$dosName] = $true
+    $dos_names[$dos_name] = $true
 
-    # Store the original and DOS names in the array
-    $proposedChanges += [PSCustomObject]@{
-        'Original Name' = $originalName
-        'DOS Compatible Name' = $dosName
+    $proposed_changes += [PSCustomObject]@{
+        'Original Name' = $original_name
+        'DOS Compatible Name' = $dos_name
     }
 }
 
-# Print all the proposed name changes
-$proposedChanges | Format-Table -AutoSize
+$proposed_changes | Format-Table -AutoSize
 
-# Ask the user if they want to rename the files
-$userInput = Read-Host -Prompt "Do you want to rename the files as proposed? (Y/N)"
+$user_input = Read-Host -Prompt "Do you want to rename the files as proposed? (Y/N)"
 
-# If the user types 'Y', rename the files
-if ($userInput -eq 'Y') {
-    foreach ($change in $proposedChanges) {
-        $originalPath = Join-Path -Path $directoryPath -ChildPath $change.'Original Name'
-        Rename-Item -Path $originalPath -NewName $change.'DOS Compatible Name'
+if ($user_input -eq 'Y') {
+    foreach ($change in $proposed_changes) {
+        $original_path = Join-Path -Path $directory_path -ChildPath $change.'Original Name'
+        Rename-Item -Path $original_path -NewName $change.'DOS Compatible Name'
     }
 }
-# If the user types anything other than 'Y', exit the script
 else {
     Write-Output "Exiting the script as per user request."
     exit
